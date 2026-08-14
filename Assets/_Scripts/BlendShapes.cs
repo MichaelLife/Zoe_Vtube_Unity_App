@@ -7,10 +7,15 @@ public class BlendShapes : MonoBehaviour
     public string BS_EyelashesClosed_L;
     public string BS_EyelashesClosed_R;
     public string BS_MouthOpen;
-    public string BS_MouthSmile_L;
-    public string BS_MouthSmile_R;
-    public string BS_MouthKiss_L;
-    public string BS_MouthKiss_R;
-    public string BS_MouthPuff_L;
-    public string BS_MouthPuff_R;
+    public string BS_MouthSmile;
+    public string BS_MouthKiss;
+    public string BS_MouthPuff;
+    public string BS_MouthSad;
+    public string BS_EyebrowUp_L;
+    public string BS_EyebrowUp_R;
+    public string BS_EyebrowDown_L;
+    public string BS_EyebrowDown_R;
+
+    public string BS_Surprised;
+    public string BS_Angry;
 }

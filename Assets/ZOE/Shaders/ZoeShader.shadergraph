@@ -502,6 +502,9 @@
         },
         {
             "m_Id": "dacdc3b0c71243baa9a9fa63d3efd253"
+        },
+        {
+            "m_Id": "3fef190da9bf4430b65e9304696c630d"
         }
     ],
     "m_StickyNoteDatas": [],
@@ -2371,8 +2374,8 @@
     ],
     "m_VertexContext": {
         "m_Position": {
-            "x": 3097.0,
-            "y": -307.0000305175781
+            "x": 2426.999755859375,
+            "y": -640.9999389648438
         },
         "m_Blocks": [
             {
@@ -2388,8 +2391,8 @@
     },
     "m_FragmentContext": {
         "m_Position": {
-            "x": 3097.0,
-            "y": -76.00005340576172
+            "x": 2426.999755859375,
+            "y": -409.9998779296875
         },
         "m_Blocks": [
             {
@@ -3404,7 +3407,7 @@
     "m_Type": "UnityEditor.ShaderGraph.DotProductNode",
     "m_ObjectId": "109837c93cf54a30b54883078a8c98b1",
     "m_Group": {
-        "m_Id": ""
+        "m_Id": "3fef190da9bf4430b65e9304696c630d"
     },
     "m_Name": "Dot Product",
     "m_DrawState": {
@@ -3798,10 +3801,10 @@
         "m_Expanded": false,
         "m_Position": {
             "serializedVersion": "2",
-            "x": -2926.0,
-            "y": 401.0,
+            "x": -2947.0,
+            "y": 391.0,
             "width": 208.0,
-            "height": 278.0
+            "height": 277.0
         }
     },
     "m_Slots": [
@@ -5726,7 +5729,7 @@
     "m_Type": "UnityEditor.ShaderGraph.FresnelNode",
     "m_ObjectId": "3ce0c73fd1364b71b7c113f54d52f747",
     "m_Group": {
-        "m_Id": ""
+        "m_Id": "3fef190da9bf4430b65e9304696c630d"
     },
     "m_Name": "Fresnel Effect",
     "m_DrawState": {
@@ -5811,6 +5814,17 @@
         "w": 0.0
     },
     "m_LiteralMode": false
+}
+
+{
+    "m_SGVersion": 0,
+    "m_Type": "UnityEditor.ShaderGraph.GroupData",
+    "m_ObjectId": "3fef190da9bf4430b65e9304696c630d",
+    "m_Title": "RIMLIGHT",
+    "m_Position": {
+        "x": -227.0,
+        "y": -1313.0
+    }
 }
 
 {
@@ -10004,7 +10018,7 @@
     "m_Type": "UnityEditor.ShaderGraph.SaturateNode",
     "m_ObjectId": "8180fdc8840047d9a52f672b5a901b61",
     "m_Group": {
-        "m_Id": ""
+        "m_Id": "3fef190da9bf4430b65e9304696c630d"
     },
     "m_Name": "Saturate",
     "m_DrawState": {
@@ -11123,7 +11137,7 @@
     "m_Type": "UnityEditor.ShaderGraph.MainLightDirectionNode",
     "m_ObjectId": "9223aeae790b49e280e078050a516be1",
     "m_Group": {
-        "m_Id": ""
+        "m_Id": "3fef190da9bf4430b65e9304696c630d"
     },
     "m_Name": "Main Light Direction",
     "m_DrawState": {
@@ -11278,15 +11292,15 @@
     "m_Type": "UnityEditor.ShaderGraph.PropertyNode",
     "m_ObjectId": "94c54d909ee4440081462847cb610e71",
     "m_Group": {
-        "m_Id": ""
+        "m_Id": "3fef190da9bf4430b65e9304696c630d"
     },
     "m_Name": "Property",
     "m_DrawState": {
         "m_Expanded": true,
         "m_Position": {
             "serializedVersion": "2",
-            "x": -52.0,
-            "y": -1197.0,
+            "x": -81.0,
+            "y": -1161.0,
             "width": 153.0,
             "height": 34.0
         }
@@ -12003,7 +12017,7 @@
     "m_Type": "UnityEditor.ShaderGraph.NormalVectorNode",
     "m_ObjectId": "a336b8d5256c4ea6ba5167364007e86c",
     "m_Group": {
-        "m_Id": ""
+        "m_Id": "3fef190da9bf4430b65e9304696c630d"
     },
     "m_Name": "Normal Vector",
     "m_DrawState": {
@@ -12100,7 +12114,7 @@
     "m_Type": "UnityEditor.ShaderGraph.SmoothstepNode",
     "m_ObjectId": "a486ccfb1e264e7f81209d8b17a1f6b2",
     "m_Group": {
-        "m_Id": ""
+        "m_Id": "3fef190da9bf4430b65e9304696c630d"
     },
     "m_Name": "Smoothstep",
     "m_DrawState": {
@@ -14017,7 +14031,7 @@
     "m_Type": "UnityEditor.ShaderGraph.MultiplyNode",
     "m_ObjectId": "c4768f6669c540fa9ba27f287694a220",
     "m_Group": {
-        "m_Id": ""
+        "m_Id": "3fef190da9bf4430b65e9304696c630d"
     },
     "m_Name": "Multiply",
     "m_DrawState": {

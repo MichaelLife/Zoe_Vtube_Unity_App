@@ -20,11 +20,13 @@ public class OSF_Script : MonoBehaviour
     [SerializeField] OpenSee.OpenSeeExpression openSeeExpression;
     private BlendShapes _bs;
 
-    [Header("MESHES THAT HAVE BLEND SHAPES")]
+    [Header("MESHES WITH BLEND SHAPES")]
     [SerializeField] SkinnedMeshRenderer Face;
     [SerializeField] SkinnedMeshRenderer Eyelashes;
     [Header("MESHES TO ROTATE")]
     [SerializeField] Transform Head;
+    [SerializeField] Transform Chest;
+    [SerializeField] Transform Neck;
     [SerializeField] Transform LeftEye;
     [SerializeField] Transform RightEye;
 
@@ -42,6 +44,7 @@ public class OSF_Script : MonoBehaviour
     [SerializeField] float openThreshold = 0.6f;
     [Tooltip("The minimum angle of movement that the eye has to make for the model's eye to move (to avoid eye shaking)")]
     [SerializeField] float deadzone = 5f;
+    [SerializeField] float maxRotationAngle = 24f;
     [SerializeField] float gazeSpeed = 5f;
     [SerializeField] float eyelidSpeed = 5f;
     [Tooltip("Small movements have lower speed")]
@@ -61,21 +64,32 @@ public class OSF_Script : MonoBehaviour
     [Range(0, 1)]
     [SerializeField] float mouthOpenRatio;
     [SerializeField] float mouthSpeed;
-
-    [Range(0, 1)]
-    [SerializeField] float mouthInOutLeftMin;
-    [Range(0, 1)]
-    [SerializeField] float mouthInOutRigthMin;
-    [Range(0, 10)]
-    [SerializeField] float mouthInOutLeftMult;
-    [Range(0, 10)]
-    [SerializeField] float mouthInOutRigthMult;
     [Range(0, 2)]
     [SerializeField] float mouthInOutRatio = 1f;
 
+    [Header("EYEBROWS")]
+    [SerializeField] float eyebrowsSpeed;
+    [Range(-1, 1)]
+    [SerializeField] float eyebrowsUpLeft;
+    [Range(-1, 1)]
+    [SerializeField] float eyebrowsDownLeft;
+    [Range(0, 1)]
+    [SerializeField] float eyebrowDeadzoneLeft;
+    [Range(0, 1)]
+    [SerializeField] float eyebrowsLoweredRatio;
+
+    private float eyebrowNeutralLeft;
+
+    [Header("BODY")]
+    [SerializeField] float BodySpeed;
+    [Range(0, 1)]
+    [SerializeField] float BodyRotationRatio;
+    [SerializeField] float squashThreshold;
+    [SerializeField] Animator anim;
+    private Vector3 previousHeadPos;
 
     //Initial rotations for the different parts (for calibration)
-    Quaternion InitialHeadRotation, InitialLEyeRotation, InitialREyeRotation;
+    Quaternion InitialHeadRotation, InitialLEyeRotation, InitialREyeRotation, InitialBodyRotation, InitialNeckRotation;
 
     //Timing that the gaze have to be in a different position for the eyes to move (to avoid shaking rapidly)
     float eyeGazeTimer, eyeGazeTimerMax;
@@ -90,18 +104,24 @@ public class OSF_Script : MonoBehaviour
     //Coroutine for the continous eye rotation method
     Coroutine continousEyeRotation;
 
+    Coroutine squashCoroutine;
+
     #region BLEND SHAPES
     private int BS_EyeClosed_L;
     private int BS_EyeClosed_R;
     private int BS_EyelashesClosed_L;
     private int BS_EyelashesClosed_R;
     private int BS_MouthOpen;
-    private int BS_MouthSmile_L;
-    private int BS_MouthSmile_R;
-    private int BS_MouthKiss_L;
-    private int BS_MouthKiss_R;
-    private int BS_MouthPuff_L;
-    private int BS_MouthPuff_R;
+    private int BS_MouthSmile;
+    private int BS_MouthKiss;
+    private int BS_MouthPuff;
+    private int BS_MouthSad;
+    private int BS_EyebrowUp_L;
+    private int BS_EyebrowUp_R;
+    private int BS_EyebrowDown_L;
+    private int BS_EyebrowDown_R;
+    private int BS_Surprised;
+    private int BS_Angry;
     #endregion
 
     void Start()
@@ -110,6 +130,8 @@ public class OSF_Script : MonoBehaviour
         eyeGazeTimerMax = 0.1f;
         expressionTimerMax = 0.1f;
         InitialHeadRotation = Head.rotation;
+        InitialBodyRotation = Chest.rotation;
+        InitialNeckRotation = Neck.rotation;
         InitialLEyeRotation = LeftEye.localRotation;
         InitialREyeRotation = RightEye.localRotation;
         continousEyeRotation = null;
@@ -120,6 +142,8 @@ public class OSF_Script : MonoBehaviour
         openSeeExpression.filename = @"C:\Users\migue\Desktop\GitHub\VtuberApp\Assets\Zoe\Expressions\Zoe_Expressions";
         openSeeExpression.load = true;
         openSeeExpression.predict = true;
+
+        eyebrowNeutralLeft = (eyebrowsDownLeft + eyebrowsUpLeft) / 2;
     }
 
     // Update is called once per frame
@@ -135,9 +159,11 @@ public class OSF_Script : MonoBehaviour
         //Make sure the data has been received
         if (_osf_data == null || !_osf_data.got3DPoints) return;
 
+        if (previousHeadPos == Vector3.zero) { previousHeadPos = _osf_data.translation; StartCoroutine(HeadSquash()); }
+
         //Handle the face
         HandleHeadRotation(_osf_data);
-        
+
         //Handle the eyes
         HandleBlink(_osf_data);
         HandleEyeRotation(_osf_data);
@@ -145,8 +171,10 @@ public class OSF_Script : MonoBehaviour
         //Handle the mouth
         HandleMouth(_osf_data);
 
+        //Handle the eyebrows
+        HandleEyebrows(_osf_data);
+
         HandleExpressions(openSeeExpression.expression);
-         Debug.Log(openSeeExpression.expression);
     }
 
     #region HEAD
@@ -154,8 +182,42 @@ public class OSF_Script : MonoBehaviour
     {
         var _headTargetRot = InitialHeadRotation * Quaternion.Euler(-head_data.rotation.x + HeadRotationOffset.x, -head_data.rotation.y + HeadRotationOffset.y, head_data.rotation.z + HeadRotationOffset.z);
 
-        Head.transform.rotation = Quaternion.Slerp(Head.rotation, _headTargetRot, 10 * Time.deltaTime);
+        HandleBodyRotation(_headTargetRot.eulerAngles);
+
+        Head.transform.rotation = Quaternion.Slerp(Head.rotation, _headTargetRot, BodySpeed * Time.deltaTime);
     }
+
+    private void HandleBodyRotation(Vector3 headRot)
+    {
+        Quaternion _bodyTargetRot = Quaternion.Lerp(InitialBodyRotation, InitialBodyRotation * Quaternion.Euler(headRot.x, 0, headRot.z), BodyRotationRatio);
+        Quaternion _neckTargetRot = Quaternion.Lerp(InitialNeckRotation, InitialNeckRotation * Quaternion.Euler(headRot.x, 0, headRot.z), BodyRotationRatio);
+
+        Chest.transform.rotation = Quaternion.Slerp(Chest.rotation, _bodyTargetRot, BodySpeed * Time.deltaTime);
+        Neck.transform.rotation = Quaternion.Slerp(Neck.rotation, _neckTargetRot, BodySpeed * Time.deltaTime);
+    }
+
+    IEnumerator HeadSquash()
+    {
+        while (true)
+        {
+            var head_data = openSee.GetOpenSeeData(0);
+
+            if (head_data != null)
+            {
+                float distance = head_data.translation.y - previousHeadPos.y;
+
+                if (distance < -squashThreshold)
+                {
+                    bool down = distance < 0;
+                    anim.SetTrigger("SquashDown");
+                    yield return new WaitForSeconds(1f);
+                }
+                previousHeadPos = head_data.translation;
+            }
+            yield return new WaitForSeconds(0.1f);
+        }
+    }
+
     #endregion
 
     #region EYES
@@ -186,7 +248,7 @@ public class OSF_Script : MonoBehaviour
         }
         else
         {   
-            Blink(false);
+            HandleEyelids(eye_data);
         }
     }
     private void Blink(bool startBlink)
@@ -207,6 +269,28 @@ public class OSF_Script : MonoBehaviour
             Eyelashes.SetBlendShapeWeight(BS_EyelashesClosed_L, Mathf.Lerp(Eyelashes.GetBlendShapeWeight(BS_EyelashesClosed_L), baseEylidPose * 100f, eyelidSpeed * Time.deltaTime));
             Eyelashes.SetBlendShapeWeight(BS_EyelashesClosed_R, Mathf.Lerp(Eyelashes.GetBlendShapeWeight(BS_EyelashesClosed_R), baseEylidPose * 100f, eyelidSpeed * Time.deltaTime));
         }
+    }
+
+    private void HandleEyelids(OpenSee.OpenSee.OpenSeeData eye_data)
+    {
+        Face.SetBlendShapeWeight(BS_EyeClosed_R, Mathf.Lerp(Face.GetBlendShapeWeight(BS_EyeClosed_R), (1 - eye_data.leftEyeOpen) * 100, eyelidSpeed * Time.deltaTime));
+        Face.SetBlendShapeWeight(BS_EyeClosed_L, Mathf.Lerp(Face.GetBlendShapeWeight(BS_EyeClosed_L), (1 - eye_data.leftEyeOpen) * 100, eyelidSpeed * Time.deltaTime));
+
+        Eyelashes.SetBlendShapeWeight(BS_EyelashesClosed_L, Mathf.Lerp(Eyelashes.GetBlendShapeWeight(BS_EyelashesClosed_L), (1 - eye_data.leftEyeOpen) * 100, eyelidSpeed * Time.deltaTime));
+        Eyelashes.SetBlendShapeWeight(BS_EyelashesClosed_R, Mathf.Lerp(Eyelashes.GetBlendShapeWeight(BS_EyelashesClosed_R), (1 - eye_data.leftEyeOpen) * 100, eyelidSpeed * Time.deltaTime));
+        /*
+        if (!areEyesOpen(eye_data) || eye_data.leftEyeOpen > 0.9f)
+        {
+            Face.SetBlendShapeWeight(BS_EyeClosed_R, Mathf.Lerp(Face.GetBlendShapeWeight(BS_EyeClosed_R), eye_data.leftEyeOpen * 100, eyelidSpeed * Time.deltaTime));
+            Face.SetBlendShapeWeight(BS_EyeClosed_L, Mathf.Lerp(Face.GetBlendShapeWeight(BS_EyeClosed_L), eye_data.leftEyeOpen * 100, eyelidSpeed * Time.deltaTime));
+
+            Eyelashes.SetBlendShapeWeight(BS_EyelashesClosed_L, Mathf.Lerp(Eyelashes.GetBlendShapeWeight(BS_EyelashesClosed_L), eye_data.leftEyeOpen * 100, eyelidSpeed * Time.deltaTime));
+            Eyelashes.SetBlendShapeWeight(BS_EyelashesClosed_R, Mathf.Lerp(Eyelashes.GetBlendShapeWeight(BS_EyelashesClosed_R), eye_data.leftEyeOpen * 100, eyelidSpeed * Time.deltaTime));
+        }
+        else
+        {
+            Blink(false);
+        }*/
     }
 
     //ROTATION TYPES-------------------------------------------------------------------
@@ -283,6 +367,8 @@ public class OSF_Script : MonoBehaviour
 
                 if (areEyesOpen(eye_data)) yield return null;
 
+                if(isMoreThanMaxAngle(InitialREyeRotation, eye_data.rightGaze, maxRotationAngle)) yield return null;
+
                 Quaternion rightGaze = ApplyDeadzone(InitialREyeRotation, eye_data.rightGaze, deadzone);
 
                 Quaternion _LEyeRot = InitialLEyeRotation * Quaternion.Euler(-rightGaze.eulerAngles.x, -rightGaze.eulerAngles.y - 5, eye_data.leftGaze.eulerAngles.z) * Quaternion.Euler(EyeRotationOffset);
@@ -313,6 +399,14 @@ public class OSF_Script : MonoBehaviour
         return (1f - Mathf.Exp(-gazeSpeed * relativeVelMult * Time.deltaTime));
     }
 
+    private bool isMoreThanMaxAngle(Quaternion baseRot, Quaternion rot, float max)
+    {
+        if (Quaternion.Angle(baseRot, rot) > max)
+            return true;
+
+        return false;
+    }
+
     private Quaternion ApplyDeadzone(Quaternion baseRot, Quaternion rot, float deadzone)
     {
         if (Quaternion.Angle(baseRot, rot) < deadzone)
@@ -328,7 +422,6 @@ public class OSF_Script : MonoBehaviour
     private void HandleMouth(OpenSee.OpenSee.OpenSeeData mouth_data)
     {
         HandleOpenMouth(mouth_data); //OPEN MOUTH
-        //HandleCornerInOut(mouth_data); //SMILE AND KISS
     }
 
     private void HandleOpenMouth(OpenSee.OpenSee.OpenSeeData mouth_data)
@@ -342,39 +435,40 @@ public class OSF_Script : MonoBehaviour
             Face.SetBlendShapeWeight(BS_MouthOpen, Mathf.Lerp(Face.GetBlendShapeWeight(BS_MouthOpen), 0, mouthSpeed * Time.deltaTime));
         }
     }
-    private void HandleCornerInOut(OpenSee.OpenSee.OpenSeeData mouth_data) //SMILE AND KISS
-    {
-        //LEFT
-        float _mouthInOutLeft = mouth_data.features.MouthCornerInOutLeft;
-        if (_mouthInOutLeft > mouthInOutLeftMin)//SMILE / Extend mouth
-        {
-            Face.SetBlendShapeWeight(BS_MouthSmile_L, Mathf.Lerp(Face.GetBlendShapeWeight(BS_MouthSmile_L), Mathf.Clamp(mouthInOutRatio * mouthInOutLeftMult *  _mouthInOutLeft * 100, 0, 100), mouthSpeed * Time.deltaTime));
-        }
-        else if (_mouthInOutLeft < -mouthInOutLeftMin) //Kiss / Contract mouth
-        {
-            Face.SetBlendShapeWeight(BS_MouthKiss_L, Mathf.Lerp(Face.GetBlendShapeWeight(BS_MouthKiss_L), Mathf.Clamp(mouthInOutRatio * -_mouthInOutLeft * 100, 0, 100), mouthSpeed * Time.deltaTime));
-        }
-        else
-        {
-            Face.SetBlendShapeWeight(BS_MouthSmile_L, Mathf.Lerp(Face.GetBlendShapeWeight(BS_MouthSmile_L), 0, mouthSpeed * Time.deltaTime));
-            Face.SetBlendShapeWeight(BS_MouthKiss_L, Mathf.Lerp(Face.GetBlendShapeWeight(BS_MouthKiss_L), 0, mouthSpeed * Time.deltaTime));
-        }
 
-        //RIGTH
-        float _mouthInOutRight = mouth_data.features.MouthCornerInOutRight;
-        if (_mouthInOutRight > mouthInOutRigthMin) //SMILE / Extend mouth
+    #endregion
+
+    #region EYEBROWS
+    private void HandleEyebrows(OpenSee.OpenSee.OpenSeeData brow_data)
+    {
+        //HandleEyebrow(brow_data.features.EyebrowUpDownRight,BS_EyebrowUp_R, BS_EyebrowDown_R);
+        //HandleEyebrow(brow_data.features.EyebrowUpDownLeft, BS_EyebrowUp_L, BS_EyebrowDown_L);
+    }
+
+    private void HandleEyebrow(float value, int eyebrowUp, int eyebrowDown)
+    {
+        Debug.Log(value + "  " + (eyebrowNeutralLeft + eyebrowDeadzoneLeft));
+
+        float offset = eyebrowsDownLeft;
+        if (eyebrowsDownLeft < 0) offset = -eyebrowsDownLeft;
+        float mult = 1 / (eyebrowsUpLeft + offset);
+
+        float upValue = (value + offset) * mult;
+        float downValue = 1 - ((value - offset) * mult);
+
+
+        if (value > eyebrowNeutralLeft + eyebrowDeadzoneLeft)
         {
-            Face.SetBlendShapeWeight(BS_MouthSmile_R, Mathf.Lerp(Face.GetBlendShapeWeight(BS_MouthSmile_R), Mathf.Clamp(mouthInOutRatio * mouthInOutRigthMult * _mouthInOutRight * 100, 0, 100), mouthSpeed * Time.deltaTime));
+            SetBlendShapes(eyebrowUp, Mathf.Clamp(upValue, 0, 1) * 100, eyebrowsSpeed);
         }
-        else if(_mouthInOutRight < -mouthInOutRigthMin) //Kiss / Contract mouth
+        else if (value < eyebrowNeutralLeft - eyebrowDeadzoneLeft)
         {
-            Debug.Log("AAAA");
-            Face.SetBlendShapeWeight(BS_MouthKiss_R, Mathf.Lerp(Face.GetBlendShapeWeight(BS_MouthKiss_R), Mathf.Clamp(mouthInOutRatio * -_mouthInOutRight * 100, 0, 100), mouthSpeed * Time.deltaTime));
+            SetBlendShapes(eyebrowDown,  Mathf.Clamp(downValue, 0, 1) * 100, eyebrowsSpeed);
         }
         else
         {
-            Face.SetBlendShapeWeight(BS_MouthSmile_R, Mathf.Lerp(Face.GetBlendShapeWeight(BS_MouthSmile_R), 0, mouthSpeed * Time.deltaTime));
-            Face.SetBlendShapeWeight(BS_MouthKiss_R, Mathf.Lerp(Face.GetBlendShapeWeight(BS_MouthKiss_R), 0, mouthSpeed * Time.deltaTime));
+            SetBlendShapes(eyebrowDown, 0, eyebrowsSpeed);
+            SetBlendShapes(eyebrowUp, 0, eyebrowsSpeed);
         }
     }
 
@@ -388,12 +482,16 @@ public class OSF_Script : MonoBehaviour
         BS_EyelashesClosed_L = Array.IndexOf(blendShapeArrayEyelashes, _blendShapesNames.BS_EyelashesClosed_L);
         BS_EyelashesClosed_R = Array.IndexOf(blendShapeArrayEyelashes, _blendShapesNames.BS_EyelashesClosed_R);
         BS_MouthOpen = Array.IndexOf(blendShapeArrayFace, _blendShapesNames.BS_MouthOpen);
-        BS_MouthSmile_L = Array.IndexOf(blendShapeArrayFace, _blendShapesNames.BS_MouthSmile_L);
-        BS_MouthSmile_R = Array.IndexOf(blendShapeArrayFace, _blendShapesNames.BS_MouthSmile_R);
-        BS_MouthKiss_L = Array.IndexOf(blendShapeArrayFace, _blendShapesNames.BS_MouthKiss_L);
-        BS_MouthKiss_R = Array.IndexOf(blendShapeArrayFace, _blendShapesNames.BS_MouthKiss_R);
-        BS_MouthPuff_L = Array.IndexOf(blendShapeArrayFace, _blendShapesNames.BS_MouthPuff_L);
-        BS_MouthPuff_R = Array.IndexOf(blendShapeArrayFace, _blendShapesNames.BS_MouthPuff_R);
+        BS_MouthSmile = Array.IndexOf(blendShapeArrayFace, _blendShapesNames.BS_MouthSmile);
+        BS_MouthKiss = Array.IndexOf(blendShapeArrayFace, _blendShapesNames.BS_MouthKiss);
+        BS_MouthPuff = Array.IndexOf(blendShapeArrayFace, _blendShapesNames.BS_MouthPuff);
+        BS_MouthSad = Array.IndexOf(blendShapeArrayFace, _blendShapesNames.BS_MouthSad);
+        BS_EyebrowUp_L = Array.IndexOf(blendShapeArrayFace, _blendShapesNames.BS_EyebrowUp_L);
+        BS_EyebrowUp_R = Array.IndexOf(blendShapeArrayFace, _blendShapesNames.BS_EyebrowUp_R);
+        BS_EyebrowDown_L = Array.IndexOf(blendShapeArrayFace, _blendShapesNames.BS_EyebrowDown_L);
+        BS_EyebrowDown_R = Array.IndexOf(blendShapeArrayFace, _blendShapesNames.BS_EyebrowDown_R);
+        BS_Angry = Array.IndexOf(blendShapeArrayFace, _blendShapesNames.BS_Angry);
+        BS_Surprised = Array.IndexOf(blendShapeArrayFace, _blendShapesNames.BS_Surprised);
     }
 
     public string[] getBlendShapeNames(GameObject obj)
@@ -410,17 +508,13 @@ public class OSF_Script : MonoBehaviour
         }
         return arr;
     }
+    private void SetBlendShapes(int _blendShape, float value, float speed)
+    {
+        Face.SetBlendShapeWeight(_blendShape, Mathf.Lerp(Face.GetBlendShapeWeight(_blendShape), value, speed * Time.deltaTime));
+    }
     #endregion
 
     #region EXPRESSIONS
-    private void ResetMouthBlendShapes()
-    {
-        //Face.SetBlendShapeWeight(BS_MouthSmile_L, Mathf.Lerp(Face.GetBlendShapeWeight(BS_MouthSmile_L), 0, mouthSpeed * Time.deltaTime));
-        //Face.SetBlendShapeWeight(BS_MouthSmile_R, Mathf.Lerp(Face.GetBlendShapeWeight(BS_MouthSmile_R), 0, mouthSpeed * Time.deltaTime));
-        //Face.SetBlendShapeWeight(BS_MouthKiss_L, Mathf.Lerp(Face.GetBlendShapeWeight(BS_MouthKiss_L), 0, mouthSpeed * Time.deltaTime));
-        //Face.SetBlendShapeWeight(BS_MouthKiss_R, Mathf.Lerp(Face.GetBlendShapeWeight(BS_MouthKiss_R), 0, mouthSpeed * Time.deltaTime));
-        Face.SetBlendShapeWeight(BS_MouthOpen, Mathf.Lerp(Face.GetBlendShapeWeight(BS_MouthOpen), 0, mouthSpeed * Time.deltaTime));
-    }
 
     private void HandleExpressions(string _expression)
     {
@@ -432,54 +526,85 @@ public class OSF_Script : MonoBehaviour
                 expressionTimer += Time.deltaTime;
                 if (expressionTimer > expressionTimerMax)
                 {
-                    Face.SetBlendShapeWeight(BS_MouthPuff_L, Mathf.Lerp(Face.GetBlendShapeWeight(BS_MouthPuff_L), 0, mouthSpeed * Time.deltaTime));
-                    Face.SetBlendShapeWeight(BS_MouthPuff_R, Mathf.Lerp(Face.GetBlendShapeWeight(BS_MouthPuff_R), 0, mouthSpeed * Time.deltaTime));
-                    Face.SetBlendShapeWeight(BS_MouthSmile_L, Mathf.Lerp(Face.GetBlendShapeWeight(BS_MouthSmile_L), 0, mouthSpeed * Time.deltaTime));
-                    Face.SetBlendShapeWeight(BS_MouthSmile_R, Mathf.Lerp(Face.GetBlendShapeWeight(BS_MouthSmile_R), 0, mouthSpeed * Time.deltaTime));
-                    Face.SetBlendShapeWeight(BS_MouthKiss_L, Mathf.Lerp(Face.GetBlendShapeWeight(BS_MouthKiss_L), 0, mouthSpeed * Time.deltaTime));
-                    Face.SetBlendShapeWeight(BS_MouthKiss_R, Mathf.Lerp(Face.GetBlendShapeWeight(BS_MouthKiss_R), 0, mouthSpeed * Time.deltaTime));
+                    SetBlendShapes(BS_MouthKiss, 0, mouthSpeed);
+                    SetBlendShapes(BS_MouthPuff, 0, mouthSpeed);
+                    SetBlendShapes(BS_MouthSad, 0, mouthSpeed);
+                    SetBlendShapes(BS_MouthSmile, 0, mouthSpeed);
+                    SetBlendShapes(BS_Angry, 0, mouthSpeed);
+                    SetBlendShapes(BS_Surprised, 0, mouthSpeed);
                 }
                 break;
+                /*
             case "puff":
                 expressionTimer += Time.deltaTime;
                 if (expressionTimer > expressionTimerMax)
                 {
-                    ResetMouthBlendShapes();
-                    Face.SetBlendShapeWeight(BS_MouthPuff_L, Mathf.Lerp(Face.GetBlendShapeWeight(BS_MouthPuff_L), 100, mouthSpeed * Time.deltaTime));
-                    Face.SetBlendShapeWeight(BS_MouthPuff_R, Mathf.Lerp(Face.GetBlendShapeWeight(BS_MouthPuff_R), 100, mouthSpeed * Time.deltaTime));
-
-                    Face.SetBlendShapeWeight(BS_MouthSmile_L, Mathf.Lerp(Face.GetBlendShapeWeight(BS_MouthSmile_L), 0, mouthSpeed * Time.deltaTime));
-                    Face.SetBlendShapeWeight(BS_MouthSmile_R, Mathf.Lerp(Face.GetBlendShapeWeight(BS_MouthSmile_R), 0, mouthSpeed * Time.deltaTime));
-                    Face.SetBlendShapeWeight(BS_MouthKiss_L, Mathf.Lerp(Face.GetBlendShapeWeight(BS_MouthKiss_L), 0, mouthSpeed * Time.deltaTime));
-                    Face.SetBlendShapeWeight(BS_MouthKiss_R, Mathf.Lerp(Face.GetBlendShapeWeight(BS_MouthKiss_R), 0, mouthSpeed * Time.deltaTime));
+                    SetBlendShapes(BS_MouthKiss, 0, mouthSpeed);
+                    SetBlendShapes(BS_MouthPuff, 100, mouthSpeed);
+                    SetBlendShapes(BS_MouthSad, 0, mouthSpeed);
+                    SetBlendShapes(BS_MouthSmile, 0, mouthSpeed);
+                    SetBlendShapes(BS_Angry, 0, mouthSpeed);
+                    SetBlendShapes(BS_Surprised, 0, mouthSpeed);
                 }
-                break;
+                break;*/
             case "kiss":
                 expressionTimer += Time.deltaTime;
                 if (expressionTimer > expressionTimerMax)
                 {
-                    ResetMouthBlendShapes();
-                    Face.SetBlendShapeWeight(BS_MouthKiss_L, Mathf.Lerp(Face.GetBlendShapeWeight(BS_MouthKiss_L), 100, mouthSpeed * Time.deltaTime));
-                    Face.SetBlendShapeWeight(BS_MouthKiss_R, Mathf.Lerp(Face.GetBlendShapeWeight(BS_MouthKiss_R), 100, mouthSpeed * Time.deltaTime));
-
-                    Face.SetBlendShapeWeight(BS_MouthPuff_L, Mathf.Lerp(Face.GetBlendShapeWeight(BS_MouthPuff_L), 0, mouthSpeed * Time.deltaTime));
-                    Face.SetBlendShapeWeight(BS_MouthPuff_R, Mathf.Lerp(Face.GetBlendShapeWeight(BS_MouthPuff_R), 0, mouthSpeed * Time.deltaTime));
-                    Face.SetBlendShapeWeight(BS_MouthSmile_L, Mathf.Lerp(Face.GetBlendShapeWeight(BS_MouthSmile_L), 0, mouthSpeed * Time.deltaTime));
-                    Face.SetBlendShapeWeight(BS_MouthSmile_R, Mathf.Lerp(Face.GetBlendShapeWeight(BS_MouthSmile_R), 0, mouthSpeed * Time.deltaTime));
+                    SetBlendShapes(BS_MouthKiss, 100, mouthSpeed);
+                    SetBlendShapes(BS_MouthPuff, 0, mouthSpeed);
+                    SetBlendShapes(BS_MouthSad, 0, mouthSpeed);
+                    SetBlendShapes(BS_MouthSmile, 0, mouthSpeed);
+                    SetBlendShapes(BS_Angry, 0, mouthSpeed);
+                    SetBlendShapes(BS_Surprised, 0, mouthSpeed);
                 }
                 break;
             case "happy":
                 expressionTimer += Time.deltaTime;
                 if (expressionTimer > expressionTimerMax)
                 {
-                    ResetMouthBlendShapes();
-                    Face.SetBlendShapeWeight(BS_MouthSmile_L, Mathf.Lerp(Face.GetBlendShapeWeight(BS_MouthSmile_L), 100, mouthSpeed * Time.deltaTime));
-                    Face.SetBlendShapeWeight(BS_MouthSmile_R, Mathf.Lerp(Face.GetBlendShapeWeight(BS_MouthSmile_R), 100, mouthSpeed * Time.deltaTime));
-
-                    Face.SetBlendShapeWeight(BS_MouthKiss_L, Mathf.Lerp(Face.GetBlendShapeWeight(BS_MouthKiss_L), 0, mouthSpeed * Time.deltaTime));
-                    Face.SetBlendShapeWeight(BS_MouthKiss_R, Mathf.Lerp(Face.GetBlendShapeWeight(BS_MouthKiss_R), 0, mouthSpeed * Time.deltaTime));
-                    Face.SetBlendShapeWeight(BS_MouthPuff_L, Mathf.Lerp(Face.GetBlendShapeWeight(BS_MouthPuff_L), 0, mouthSpeed * Time.deltaTime));
-                    Face.SetBlendShapeWeight(BS_MouthPuff_R, Mathf.Lerp(Face.GetBlendShapeWeight(BS_MouthPuff_R), 0, mouthSpeed * Time.deltaTime));
+                    SetBlendShapes(BS_MouthKiss, 0, mouthSpeed);
+                    SetBlendShapes(BS_MouthPuff, 0, mouthSpeed);
+                    SetBlendShapes(BS_MouthSad, 0, mouthSpeed);
+                    SetBlendShapes(BS_MouthSmile, 100, mouthSpeed);
+                    SetBlendShapes(BS_Angry, 0, mouthSpeed);
+                    SetBlendShapes(BS_Surprised, 0, mouthSpeed);
+                }
+                break;
+            case "sad":
+                expressionTimer += Time.deltaTime;
+                if (expressionTimer > expressionTimerMax)
+                {
+                    SetBlendShapes(BS_MouthKiss, 0, mouthSpeed);
+                    SetBlendShapes(BS_MouthPuff, 0, mouthSpeed);
+                    SetBlendShapes(BS_MouthSad, 100, mouthSpeed);
+                    SetBlendShapes(BS_MouthSmile, 0, mouthSpeed);
+                    SetBlendShapes(BS_Angry, 0, mouthSpeed);
+                    SetBlendShapes(BS_Surprised, 0, mouthSpeed);
+                }
+                break;
+            case "angry":
+                expressionTimer += Time.deltaTime;
+                if (expressionTimer > expressionTimerMax)
+                {
+                    SetBlendShapes(BS_MouthKiss, 0, mouthSpeed);
+                    SetBlendShapes(BS_MouthPuff, 0, mouthSpeed);
+                    SetBlendShapes(BS_MouthSad, 0, mouthSpeed);
+                    SetBlendShapes(BS_MouthSmile, 0, mouthSpeed);
+                    SetBlendShapes(BS_Angry, 100, mouthSpeed);
+                    SetBlendShapes(BS_Surprised, 0, mouthSpeed);
+                }
+                break;
+            case "surprised":
+                expressionTimer += Time.deltaTime;
+                if (expressionTimer > expressionTimerMax)
+                {
+                    SetBlendShapes(BS_MouthKiss, 0, mouthSpeed);
+                    SetBlendShapes(BS_MouthPuff, 0, mouthSpeed);
+                    SetBlendShapes(BS_MouthSad, 0, mouthSpeed);
+                    SetBlendShapes(BS_MouthSmile, 0, mouthSpeed);
+                    SetBlendShapes(BS_Angry, 0, mouthSpeed);
+                    SetBlendShapes(BS_Surprised, 100, mouthSpeed);
                 }
                 break;
         }
