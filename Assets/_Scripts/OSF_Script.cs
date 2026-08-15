@@ -5,6 +5,7 @@ using System;
 using System.Linq;
 using uLipSync;
 using UnityEngine.VFX;
+using UnityEngine.InputSystem;
 
 [RequireComponent(typeof(BlendShapes))]
 public class OSF_Script : MonoBehaviour
@@ -13,7 +14,6 @@ public class OSF_Script : MonoBehaviour
     {
         Fixed,
         Continous,
-        Mixed,
         None
     };
 
@@ -21,6 +21,9 @@ public class OSF_Script : MonoBehaviour
     [SerializeField] OpenSee.OpenSee openSee;
     [SerializeField] OpenSee.OpenSeeExpression openSeeExpression;
     private BlendShapes _bs;
+
+    [Header("INPUT")]
+    [SerializeField] INPUTS inputActions;
 
     [Header("MESHES WITH BLEND SHAPES")]
     [SerializeField] SkinnedMeshRenderer Face;
@@ -61,7 +64,6 @@ public class OSF_Script : MonoBehaviour
     [Tooltip("Fixed -> Only goes from left to right | " +
         "Continous -> Follows eye tracking data (the result will depend on your eyes, lighting, camera, angle, if you " +
         "have glasses etc. | " +
-        "Mixed -> Mixes small movements from the continous tipe with the fixed left to right for bigger eye movements | " +
         "None -> Eyes fixed to one position (the offset lets you change it))")]
     [SerializeField] EyeTrackingType eyeTrackingType = EyeTrackingType.Continous;
 
@@ -94,11 +96,13 @@ public class OSF_Script : MonoBehaviour
     [SerializeField] float BodyRotationRatio;
     [SerializeField] float squashThreshold;
     [SerializeField] Animator anim;
+    [SerializeField] bool OnlyManualExpressions = true;
     private Vector3 previousHeadPos;
 
     [Header("VFX")]
     [SerializeField] VisualEffect sleepVFX;
     [SerializeField] float SleepTimerMax = 4f;
+    [SerializeField] GameObject masteryObj;
     float SleepTimer = 0f;
 
     //Initial rotations for the different parts (for calibration)
@@ -109,7 +113,7 @@ public class OSF_Script : MonoBehaviour
 
     //Timing that the gaze have to be in a different position for the eyes to move (to avoid shaking rapidly)
     float expressionTimer, expressionTimerMax;
-    string expression;
+    string expression = "neutral";
 
     //Target rotation for the eyes
     Quaternion _RTargetRot, _LTargetRot;
@@ -118,21 +122,21 @@ public class OSF_Script : MonoBehaviour
     Coroutine continousEyeRotation;
 
     #region BLEND SHAPES
-    private int BS_EyeClosed_L;
-    private int BS_EyeClosed_R;
-    private int BS_EyelashesClosed_L;
-    private int BS_EyelashesClosed_R;
-    private int BS_MouthOpen;
-    private int BS_MouthSmile;
-    private int BS_MouthKiss;
-    private int BS_MouthPuff;
-    private int BS_MouthSad;
-    private int BS_EyebrowUp_L;
-    private int BS_EyebrowUp_R;
-    private int BS_EyebrowDown_L;
-    private int BS_EyebrowDown_R;
-    private int BS_Surprised;
-    private int BS_Angry;
+    private static int BS_EyeClosed_L;
+    private static int BS_EyeClosed_R;
+    private static int BS_EyelashesClosed_L;
+    private static int BS_EyelashesClosed_R;
+    private static int BS_MouthOpen;
+    private static int BS_MouthSmile;
+    private static int BS_MouthKiss;
+    private static int BS_MouthPuff;
+    private static int BS_MouthSad;
+    private static int BS_EyebrowUp_L;
+    private static int BS_EyebrowUp_R;
+    private static int BS_EyebrowDown_L;
+    private static int BS_EyebrowDown_R;
+    private static int BS_Surprised;
+    private static int BS_Angry;
     #endregion
 
     void Start()
@@ -156,6 +160,7 @@ public class OSF_Script : MonoBehaviour
 
         eyebrowNeutralLeft = (eyebrowsDownLeft + eyebrowsUpLeft) / 2;
 
+        expression = "neutral";
         minVolume = lipSync.minVolume;
     }
 
@@ -187,7 +192,7 @@ public class OSF_Script : MonoBehaviour
         //Handle the eyebrows
         HandleEyebrows(_osf_data);
 
-        //HandleExpressions(openSeeExpression.expression);
+        HandleExpressions(OnlyManualExpressions ? expression : openSeeExpression.expression); //Update only manual expressions / Update tracked expresions
     }
 
     #region HEAD
@@ -260,8 +265,6 @@ public class OSF_Script : MonoBehaviour
 
         bool L_eyeWink = eye_data.leftEyeOpen < winkThreshold;
         bool R_eyeWink = eye_data.rightEyeOpen < winkThreshold;
-
-        Debug.Log(eye_data.leftEyeOpen + "  " + eye_data.rightEyeOpen);
 
         if (L_eyeClosed && R_eyeClosed) //BOTH CLOSED (BLINK)
         {
@@ -448,10 +451,13 @@ public class OSF_Script : MonoBehaviour
         volume = Mathf.Log10(info.rawVolume); 
     }
 
+    public bool isTalking() => volume > minVolume;
+
     private void HandleMouth(OpenSee.OpenSee.OpenSeeData mouth_data)
     {
-        Debug.Log(volume + "  " + minVolume);
-        if (volume < minVolume)
+        if (expression != "neutral") return;
+
+        if (!isTalking())
         {
             HandleOpenMouth(mouth_data); //OPEN MOUTH
         }
@@ -474,10 +480,12 @@ public class OSF_Script : MonoBehaviour
         float _mouthWide = mouth_data.features.MouthWide;
         if (_mouthWide > 0.2f)
         {
+            Debug.Log(_mouthWide * 100);
             Face.SetBlendShapeWeight(BS_MouthSmile, Mathf.Lerp(Face.GetBlendShapeWeight(BS_MouthSmile), _mouthWide * 100, mouthSpeed * Time.deltaTime));
         }
         else
         {
+            Debug.Log(_mouthWide + "AAAA");
             Face.SetBlendShapeWeight(BS_MouthSmile, Mathf.Lerp(Face.GetBlendShapeWeight(BS_MouthSmile), 0, mouthSpeed * Time.deltaTime));
         }
     }
@@ -562,98 +570,156 @@ public class OSF_Script : MonoBehaviour
 
     #region EXPRESSIONS
 
+    private int[] expressionList =
+    {
+        BS_MouthKiss,
+        BS_MouthPuff,
+        BS_MouthSad,
+        BS_Angry,
+        BS_Surprised
+    };
+
     private void HandleExpressions(string _expression)
     {
         if (expression != _expression)
         { expression = _expression; expressionTimer = 0; }
+
+        if (isTalking()) return; //Dont do expressions if character is talking
+
         switch (_expression)
         {
             case "neutral":
                 expressionTimer += Time.deltaTime;
                 if (expressionTimer > expressionTimerMax)
                 {
-                    SetBlendShapes(Face, BS_MouthKiss, 0, mouthSpeed);
-                    SetBlendShapes(Face, BS_MouthPuff, 0, mouthSpeed);
-                    SetBlendShapes(Face, BS_MouthSad, 0, mouthSpeed);
-                    SetBlendShapes(Face, BS_MouthSmile, 0, mouthSpeed);
-                    SetBlendShapes(Face, BS_Angry, 0, mouthSpeed);
-                    SetBlendShapes(Face, BS_Surprised, 0, mouthSpeed);
+                    foreach (int expression in expressionList)
+                    {
+                        SetBlendShapes(Face, expression, 0, mouthSpeed);
+                    }
                 }
                 break;
-                /*
-            case "puff":
-                expressionTimer += Time.deltaTime;
-                if (expressionTimer > expressionTimerMax)
-                {
-                    SetBlendShapes(BS_MouthKiss, 0, mouthSpeed);
-                    SetBlendShapes(BS_MouthPuff, 100, mouthSpeed);
-                    SetBlendShapes(BS_MouthSad, 0, mouthSpeed);
-                    SetBlendShapes(BS_MouthSmile, 0, mouthSpeed);
-                    SetBlendShapes(BS_Angry, 0, mouthSpeed);
-                    SetBlendShapes(BS_Surprised, 0, mouthSpeed);
-                }
-                break;*/
             case "kiss":
                 expressionTimer += Time.deltaTime;
                 if (expressionTimer > expressionTimerMax)
                 {
-                    SetBlendShapes(Face, BS_MouthKiss, 100, mouthSpeed);
-                    SetBlendShapes(Face, BS_MouthPuff, 0, mouthSpeed);
-                    SetBlendShapes(Face, BS_MouthSad, 0, mouthSpeed);
-                    SetBlendShapes(Face, BS_MouthSmile, 0, mouthSpeed);
-                    SetBlendShapes(Face, BS_Angry, 0, mouthSpeed);
-                    SetBlendShapes(Face, BS_Surprised, 0, mouthSpeed);
-                }
-                break;
-            case "happy":
-                expressionTimer += Time.deltaTime;
-                if (expressionTimer > expressionTimerMax)
-                {
-                    SetBlendShapes(Face, BS_MouthKiss, 0, mouthSpeed);
-                    SetBlendShapes(Face, BS_MouthPuff, 0, mouthSpeed);
-                    SetBlendShapes(Face, BS_MouthSad, 0, mouthSpeed);
-                    SetBlendShapes(Face, BS_MouthSmile, 100, mouthSpeed);
-                    SetBlendShapes(Face, BS_Angry, 0, mouthSpeed);
-                    SetBlendShapes(Face, BS_Surprised, 0, mouthSpeed);
+                    foreach (int expression in expressionList)
+                    {
+                        if (expression == BS_MouthKiss) SetBlendShapes(Face, expression, 100, mouthSpeed);
+                        else SetBlendShapes(Face, expression, 0, mouthSpeed);
+                    }
                 }
                 break;
             case "sad":
                 expressionTimer += Time.deltaTime;
                 if (expressionTimer > expressionTimerMax)
                 {
-                    SetBlendShapes(Face, BS_MouthKiss, 0, mouthSpeed);
-                    SetBlendShapes(Face, BS_MouthPuff, 0, mouthSpeed);
-                    SetBlendShapes(Face, BS_MouthSad, 100, mouthSpeed);
-                    SetBlendShapes(Face, BS_MouthSmile, 0, mouthSpeed);
-                    SetBlendShapes(Face, BS_Angry, 0, mouthSpeed);
-                    SetBlendShapes(Face, BS_Surprised, 0, mouthSpeed);
+                    foreach (int expression in expressionList)
+                    {
+                        if (expression == BS_MouthSad) SetBlendShapes(Face, expression, 100, mouthSpeed);
+                        else SetBlendShapes(Face, expression, 0, mouthSpeed);
+                    }
                 }
                 break;
             case "angry":
                 expressionTimer += Time.deltaTime;
                 if (expressionTimer > expressionTimerMax)
                 {
-                    SetBlendShapes(Face, BS_MouthKiss, 0, mouthSpeed);
-                    SetBlendShapes(Face, BS_MouthPuff, 0, mouthSpeed);
-                    SetBlendShapes(Face, BS_MouthSad, 0, mouthSpeed);
-                    SetBlendShapes(Face, BS_MouthSmile, 0, mouthSpeed);
-                    SetBlendShapes(Face, BS_Angry, 100, mouthSpeed);
-                    SetBlendShapes(Face, BS_Surprised, 0, mouthSpeed);
+                    foreach (int expression in expressionList)
+                    {
+                        if (expression == BS_Angry) SetBlendShapes(Face, expression, 100, mouthSpeed);
+                        else SetBlendShapes(Face, expression, 0, mouthSpeed);
+                    }
                 }
                 break;
             case "surprised":
                 expressionTimer += Time.deltaTime;
                 if (expressionTimer > expressionTimerMax)
                 {
-                    SetBlendShapes(Face, BS_MouthKiss, 0, mouthSpeed);
-                    SetBlendShapes(Face, BS_MouthPuff, 0, mouthSpeed);
-                    SetBlendShapes(Face, BS_MouthSad, 0, mouthSpeed);
-                    SetBlendShapes(Face, BS_MouthSmile, 0, mouthSpeed);
-                    SetBlendShapes(Face, BS_Angry, 0, mouthSpeed);
-                    SetBlendShapes(Face, BS_Surprised, 100, mouthSpeed);
+                    foreach (int expression in expressionList)
+                    {
+                        if (expression == BS_Surprised) SetBlendShapes(Face, expression, 100, mouthSpeed);
+                        else SetBlendShapes(Face, expression, 0, mouthSpeed);
+                    }
                 }
                 break;
         }
     }
+
+    #endregion
+
+    #region INPUTS
+
+    public void OnMastery(UnityEngine.InputSystem.InputAction.CallbackContext context)
+    {
+        if (masteryObj.activeSelf) return;
+
+        masteryObj.SetActive(true);
+        masteryObj.GetComponent<Animator>().Rebind();
+
+        StartCoroutine(HideMastery());
+
+        IEnumerator HideMastery()
+        {
+            yield return new WaitForSeconds(5f);
+            masteryObj.SetActive(false);
+        }
+    }
+
+    public void OnAngry(UnityEngine.InputSystem.InputAction.CallbackContext context)
+    {
+        if (context.started) //Start expression
+        {
+            expression = "angry";
+        }
+        if (context.canceled) //Stop expression
+        {
+            expression = "neutral";
+        }
+    }
+    public void OnSurprised(UnityEngine.InputSystem.InputAction.CallbackContext context)
+    {
+        if (context.started) //Start expression
+        {
+            expression = "surprised";
+        }
+        if (context.canceled) //Stop expression
+        {
+            expression = "neutral";
+        }
+    }
+    public void OnSad(UnityEngine.InputSystem.InputAction.CallbackContext context)
+    {
+        if (context.started) //Start expression
+        {
+            expression = "sad";
+        }
+        if (context.canceled) //Stop expression
+        {
+            expression = "neutral";
+        }
+    }
+
+    private void OnEnable()
+    {
+        if (inputActions == null) inputActions = new INPUTS();
+
+        inputActions.Enable();
+
+        inputActions.ZoeActions.Mastery7.performed += OnMastery;
+
+        inputActions.ZoeActions.Angry.started += OnAngry;
+        inputActions.ZoeActions.Angry.canceled += OnAngry;
+
+        inputActions.ZoeActions.Surprised.started += OnSurprised;
+        inputActions.ZoeActions.Surprised.canceled += OnSurprised;
+
+        inputActions.ZoeActions.Sad.started += OnSad;
+        inputActions.ZoeActions.Sad.canceled += OnSad;
+    }
+    private void OnDisable()
+    {
+        inputActions.Disable();
+    }
+
     #endregion
 }
