@@ -15,7 +15,6 @@ public class BlendShapes : MonoBehaviour
     public string BS_EyebrowUp_R;
     public string BS_EyebrowDown_L;
     public string BS_EyebrowDown_R;
-
     public string BS_Surprised;
     public string BS_Angry;
 }
