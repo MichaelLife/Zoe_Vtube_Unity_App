@@ -1,0 +1,237 @@
+:root {
+}
+
+.Slider {
+    color: rgb(255, 255, 255);
+    -unity-font-style: bold;
+    font-size: 120%;
+    margin-top: 0;
+    margin-right: 0;
+    margin-bottom: 0;
+    margin-left: 0;
+}
+
+.Slider:focus {
+    color: rgb(255, 243, 177);
+    font-size: 160%;
+}
+
+.Slider #unity-tracker {
+    top: 32%;
+    height: 50%;
+    background-color: rgb(67, 43, 99);
+    border-top-width: 5px;
+    border-right-width: 5px;
+    border-bottom-width: 5px;
+    border-left-width: 5px;
+    border-top-left-radius: 15px;
+    border-top-right-radius: 15px;
+    border-bottom-right-radius: 15px;
+    border-bottom-left-radius: 15px;
+    border-left-color: rgb(164, 93, 197);
+    border-right-color: rgb(164, 93, 197);
+    border-top-color: rgb(164, 93, 197);
+    border-bottom-color: rgb(164, 93, 197);
+}
+
+.Slider #unity-dragger {
+    background-color: rgb(255, 231, 96);
+    border-top-left-radius: 0%;
+    border-top-right-radius: 0%;
+    border-bottom-right-radius: 0%;
+    border-bottom-left-radius: 0%;
+    border-top-width: 0;
+    border-right-width: 0;
+    border-bottom-width: 0;
+    border-left-width: 0;
+    height: 70%;
+    width: 5%;
+    justify-content: flex-start;
+    align-self: flex-start;
+    align-content: flex-start;
+    top: 40%;
+}
+
+.Button {
+    color: rgb(255, 255, 255);
+    -unity-font-style: bold;
+    font-size: 200%;
+    background-repeat: no-repeat no-repeat;
+    border-top-width: 5px;
+    border-right-width: 5px;
+    border-bottom-width: 5px;
+    border-left-width: 5px;
+    text-overflow: ellipsis;
+    -unity-text-auto-size: none;
+    white-space: normal;
+    margin-top: 0;
+    margin-right: 0;
+    margin-bottom: 0;
+    margin-left: 0;
+    position: relative;
+    border-top-left-radius: 25px;
+    border-top-right-radius: 25px;
+    border-bottom-right-radius: 25px;
+    border-bottom-left-radius: 25px;
+    border-left-color: rgb(255, 231, 96);
+    border-right-color: rgb(255, 231, 96);
+    border-top-color: rgb(255, 231, 96);
+    border-bottom-color: rgb(255, 231, 96);
+    -unity-background-image-tint-color: rgb(99, 79, 147);
+    background-image: url("project://database/Assets/_.Addons/FolderIcons/Gradient_Textured.png?fileID=2800000&guid=084cee37275de6c4fad9d74e1362d9cd&type=3#Gradient_Textured");
+    background-color: rgb(55, 39, 93);
+    transition-property: all;
+    transition-duration: 0.2s;
+    transition-timing-function: ease-in;
+    transition-delay: 0s;
+    scale: 1 1;
+    background-size: 100% 100%;
+    height: 8%;
+}
+
+.Button:hover {
+    color: rgb(255, 255, 255);
+    -unity-font-style: bold;
+    font-size: 200%;
+    background-repeat: no-repeat no-repeat;
+    border-top-width: 5px;
+    border-right-width: 5px;
+    border-bottom-width: 5px;
+    border-left-width: 5px;
+    text-overflow: ellipsis;
+    -unity-text-auto-size: none;
+    white-space: normal;
+    margin-top: 5px;
+    margin-right: 5px;
+    margin-bottom: 5px;
+    margin-left: 5px;
+    position: relative;
+    border-top-left-radius: 25px;
+    border-top-right-radius: 25px;
+    border-bottom-right-radius: 25px;
+    border-bottom-left-radius: 25px;
+    border-left-color: rgb(255, 231, 96);
+    border-right-color: rgb(255, 231, 96);
+    border-top-color: rgb(255, 231, 96);
+    border-bottom-color: rgb(255, 231, 96);
+    -unity-background-image-tint-color: rgb(99, 79, 147);
+    background-image: url("project://database/Assets/_.Addons/FolderIcons/Gradient_Textured.png?fileID=2800000&guid=084cee37275de6c4fad9d74e1362d9cd&type=3#Gradient_Textured");
+    background-color: rgb(55, 39, 93);
+    transition-property: all;
+    transition-duration: 0.2s;
+    transition-timing-function: ease-out;
+    transition-delay: 0s;
+    scale: 1.025 1.025 1.025;
+}
+
+.Button:active {
+    color: rgb(255, 255, 255);
+    -unity-font-style: bold;
+    font-size: 200%;
+    background-repeat: no-repeat no-repeat;
+    border-top-width: 5px;
+    border-right-width: 5px;
+    border-bottom-width: 5px;
+    border-left-width: 5px;
+    text-overflow: ellipsis;
+    -unity-text-auto-size: none;
+    white-space: normal;
+    margin-top: 5px;
+    margin-right: 5px;
+    margin-bottom: 5px;
+    margin-left: 5px;
+    position: relative;
+    border-top-left-radius: 25px;
+    border-top-right-radius: 25px;
+    border-bottom-right-radius: 25px;
+    border-bottom-left-radius: 25px;
+    border-left-color: rgb(255, 231, 96);
+    border-right-color: rgb(255, 231, 96);
+    border-top-color: rgb(255, 231, 96);
+    border-bottom-color: rgb(255, 231, 96);
+    -unity-background-image-tint-color: rgb(99, 79, 147);
+    background-image: url("project://database/Assets/_.Addons/FolderIcons/Gradient_Textured.png?fileID=2800000&guid=084cee37275de6c4fad9d74e1362d9cd&type=3#Gradient_Textured");
+    background-color: rgb(55, 39, 93);
+    transition-property: all;
+    transition-duration: 0.1s;
+    transition-timing-function: ease-in;
+    transition-delay: 0s;
+    scale: 0.95 0.95;
+}
+
+.EnumField {
+    background-color: rgb(70, 44, 104);
+    font-size: 200%;
+    color: rgb(255, 255, 255);
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    border-top-left-radius: 20px;
+    border-top-right-radius: 20px;
+    border-bottom-right-radius: 20px;
+    border-bottom-left-radius: 20px;
+    border-top-width: 5px;
+    border-right-width: 5px;
+    border-bottom-width: 5px;
+    border-left-width: 5px;
+}
+
+.unity-enum-field__input {
+    background-color: rgb(67, 43, 99);
+    border-top-left-radius: 20px;
+    border-top-right-radius: 20px;
+    border-bottom-right-radius: 20px;
+    border-bottom-left-radius: 20px;
+    border-top-width: 5px;
+    border-right-width: 5px;
+    border-bottom-width: 5px;
+    border-left-width: 5px;
+    border-left-color: rgb(164, 93, 197);
+    border-right-color: rgb(164, 93, 197);
+    border-top-color: rgb(164, 93, 197);
+    border-bottom-color: rgb(164, 93, 197);
+    -unity-font-style: bold;
+    color: rgb(255, 255, 255);
+    font-size: 100%;
+}
+
+.unity-enum-field__arrow {
+    -unity-background-image-tint-color: rgb(255, 231, 96);
+    scale: 2 2 2;
+}
+
+.EnumField:active {
+    background-color: rgb(70, 44, 104);
+    font-size: 200%;
+    color: rgb(255, 253, 171);
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    border-top-left-radius: 20px;
+    border-top-right-radius: 20px;
+    border-bottom-right-radius: 20px;
+    border-bottom-left-radius: 20px;
+    border-top-width: 5px;
+    border-right-width: 5px;
+    border-bottom-width: 5px;
+    border-left-width: 5px;
+}
+
+.EnumField:focus {
+    background-color: rgb(70, 44, 104);
+    font-size: 200%;
+    color: rgb(255, 253, 171);
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    border-top-left-radius: 20px;
+    border-top-right-radius: 20px;
+    border-bottom-right-radius: 20px;
+    border-bottom-left-radius: 20px;
+    border-top-width: 5px;
+    border-right-width: 5px;
+    border-bottom-width: 5px;
+    border-left-width: 5px;
+}
+
+.Label {
+    font-size: 30px;
+    color: rgb(255, 255, 255);
+}

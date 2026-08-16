@@ -7,19 +7,21 @@ using uLipSync;
 using UnityEngine.VFX;
 using UnityEngine.InputSystem;
 
+public enum EyeTrackingType
+{
+    Fixed,
+    Continous,
+    None
+};
+
 [RequireComponent(typeof(BlendShapes))]
 public class OSF_Script : MonoBehaviour
 {
-    public enum EyeTrackingType
-    {
-        Fixed,
-        Continous,
-        None
-    };
 
     [Header("OPEN SEE COMPONENT")]
     [SerializeField] OpenSee.OpenSee openSee;
     [SerializeField] OpenSee.OpenSeeExpression openSeeExpression;
+    [SerializeField] Zoe_UI ui;
     private BlendShapes _bs;
 
     [Header("INPUT")]
@@ -43,18 +45,19 @@ public class OSF_Script : MonoBehaviour
     [Header("EYES")]
     [Range(0, 1)]
     [Tooltip("The percentage that the eye has to be closed to be considered closed for the blinking (0 - 1)")]
-    [SerializeField] float blinkThreshold = 0.175f;
+    public float blinkThreshold = 0.175f;
     [Range(0, 1)]
     [Tooltip("The percentage that the eye has to be closed to be considered closed for the winking (0 - 1)")]
-    [SerializeField] float winkThreshold = 0.175f;
+    public float winkThreshold = 0.175f;
     [Range(0, 1)]
     [Tooltip("The percentage that the eye has to be open to be considered open (0 - 1)")]
-    [SerializeField] float openThreshold = 0.6f;
+    public float openThreshold = 0.6f;
     [Tooltip("The minimum angle of movement that the eye has to make for the model's eye to move (to avoid eye shaking)")]
-    [SerializeField] float deadzone = 5f;
+    public float deadzone = 5f;
+    public float fixedEyeRotAngle = 6f;
     [SerializeField] float maxRotationAngle = 24f;
-    [SerializeField] float gazeSpeed = 5f;
-    [SerializeField] float eyelidSpeed = 5f;
+    public float gazeSpeed = 5f;
+    public float eyelidSpeed = 5f;
     [Tooltip("Small movements have lower speed")]
     [SerializeField] bool useRelativeSpeed = true;
     [Tooltip("The smalles angle where the speed is equal to the normal gaze speed")]
@@ -65,12 +68,12 @@ public class OSF_Script : MonoBehaviour
         "Continous -> Follows eye tracking data (the result will depend on your eyes, lighting, camera, angle, if you " +
         "have glasses etc. | " +
         "None -> Eyes fixed to one position (the offset lets you change it))")]
-    [SerializeField] EyeTrackingType eyeTrackingType = EyeTrackingType.Continous;
+    public EyeTrackingType eyeTrackingType = EyeTrackingType.Continous;
 
     [Header("MOUTH")]
     [Range(0, 1)]
-    [SerializeField] float mouthOpenRatio;
-    [SerializeField] float mouthSpeed;
+    public float mouthOpenRatio;
+    public float mouthSpeed;
     [Range(0, 2)]
     [SerializeField] float mouthInOutRatio = 1f;
     [SerializeField] uLipSyncBlendShape lipSync;
@@ -80,21 +83,19 @@ public class OSF_Script : MonoBehaviour
     [Header("EYEBROWS")]
     [SerializeField] float eyebrowsSpeed;
     [Range(-1, 1)]
-    [SerializeField] float eyebrowsUpLeft;
+    [SerializeField] float eyebrowsUp;
     [Range(-1, 1)]
-    [SerializeField] float eyebrowsDownLeft;
+    [SerializeField] float eyebrowsDown;
     [Range(0, 1)]
-    [SerializeField] float eyebrowDeadzoneLeft;
-    [Range(0, 1)]
-    [SerializeField] float eyebrowsLoweredRatio;
+    [SerializeField] float eyebrowsRange;
 
     private float eyebrowNeutralLeft;
 
     [Header("BODY")]
-    [SerializeField] float BodySpeed;
+    public float BodySpeed;
     [Range(0, 1)]
-    [SerializeField] float BodyRotationRatio;
-    [SerializeField] float squashThreshold;
+    public float BodyRotationRatio;
+    public float squashThreshold;
     [SerializeField] Animator anim;
     [SerializeField] bool OnlyManualExpressions = true;
     private Vector3 previousHeadPos;
@@ -104,9 +105,13 @@ public class OSF_Script : MonoBehaviour
     [SerializeField] float SleepTimerMax = 4f;
     [SerializeField] GameObject masteryObj;
     float SleepTimer = 0f;
+    [SerializeField] Transform MainLigth;
+    [SerializeField] Transform MainCam, AppCam;
 
     //Initial rotations for the different parts (for calibration)
     Quaternion InitialHeadRotation, InitialLEyeRotation, InitialREyeRotation, InitialBodyRotation, InitialNeckRotation;
+    [HideInInspector]
+    public Quaternion HeadRotationResetOffset, LEyeRotationResetOffset, REyeRotationResetOffset;
 
     //Timing that the gaze have to be in a different position for the eyes to move (to avoid shaking rapidly)
     float eyeGazeTimer, eyeGazeTimerMax;
@@ -139,14 +144,21 @@ public class OSF_Script : MonoBehaviour
     private static int BS_Angry;
     #endregion
 
+    public static OSF_Script instance;
+
     void Start()
     {
+        instance = this;
+
         eyeGazeTimer = 0f;
         eyeGazeTimerMax = 0.1f;
         expressionTimerMax = 0.1f;
-        InitialHeadRotation = Head.rotation;
-        InitialBodyRotation = Chest.rotation;
-        InitialNeckRotation = Neck.rotation;
+        HeadRotationResetOffset = Quaternion.identity;
+        LEyeRotationResetOffset = Quaternion.identity;
+        REyeRotationResetOffset = Quaternion.identity;
+        InitialHeadRotation = Head.localRotation;
+        InitialBodyRotation = Chest.localRotation;
+        InitialNeckRotation = Neck.localRotation;
         InitialLEyeRotation = LeftEye.localRotation;
         InitialREyeRotation = RightEye.localRotation;
         continousEyeRotation = null;
@@ -158,10 +170,12 @@ public class OSF_Script : MonoBehaviour
         openSeeExpression.load = true;
         openSeeExpression.predict = true;
 
-        eyebrowNeutralLeft = (eyebrowsDownLeft + eyebrowsUpLeft) / 2;
+        //eyebrowNeutralLeft = (eyebrowsDownLeft + eyebrowsUpLeft) / 2;
 
         expression = "neutral";
         minVolume = lipSync.minVolume;
+
+        TryToLoadData();
     }
 
     // Update is called once per frame
@@ -177,7 +191,7 @@ public class OSF_Script : MonoBehaviour
         //Make sure the data has been received
         if (_osf_data == null || !_osf_data.got3DPoints) return;
 
-        if (previousHeadPos == Vector3.zero) { previousHeadPos = _osf_data.translation; StartCoroutine(HeadSquash()); }
+        if (previousHeadPos == Vector3.zero) { previousHeadPos = _osf_data.translation; StartCoroutine(HeadSquash()); ResetEyeRotation(); }
 
         //Handle the face
         HandleHeadRotation(_osf_data);
@@ -190,7 +204,7 @@ public class OSF_Script : MonoBehaviour
         HandleMouth(_osf_data);
 
         //Handle the eyebrows
-        HandleEyebrows(_osf_data);
+        //HandleEyebrows(_osf_data); <---- TOO BUGGY (maybe my face is weird, it detects different depending on angle)
 
         HandleExpressions(OnlyManualExpressions ? expression : openSeeExpression.expression); //Update only manual expressions / Update tracked expresions
     }
@@ -198,11 +212,11 @@ public class OSF_Script : MonoBehaviour
     #region HEAD
     private void HandleHeadRotation(OpenSee.OpenSee.OpenSeeData head_data)
     {
-        var _headTargetRot = InitialHeadRotation * Quaternion.Euler(-head_data.rotation.x + HeadRotationOffset.x, -head_data.rotation.y + HeadRotationOffset.y, head_data.rotation.z + HeadRotationOffset.z);
+        var _headTargetRot = InitialHeadRotation * HeadRotationResetOffset * Quaternion.Euler(-head_data.rotation.x + HeadRotationOffset.x, -head_data.rotation.y + HeadRotationOffset.y, head_data.rotation.z + HeadRotationOffset.z);
 
         HandleBodyRotation(_headTargetRot.eulerAngles);
 
-        Head.transform.rotation = Quaternion.Slerp(Head.rotation, _headTargetRot, BodySpeed * Time.deltaTime);
+        Head.transform.localRotation = Quaternion.Slerp(Head.localRotation, _headTargetRot, BodySpeed * Time.deltaTime);
     }
 
     private void HandleBodyRotation(Vector3 headRot)
@@ -210,8 +224,8 @@ public class OSF_Script : MonoBehaviour
         Quaternion _bodyTargetRot = Quaternion.Lerp(InitialBodyRotation, InitialBodyRotation * Quaternion.Euler(headRot.x, 0, headRot.z), BodyRotationRatio);
         Quaternion _neckTargetRot = Quaternion.Lerp(InitialNeckRotation, InitialNeckRotation * Quaternion.Euler(headRot.x, 0, headRot.z), BodyRotationRatio);
 
-        Chest.transform.rotation = Quaternion.Slerp(Chest.rotation, _bodyTargetRot, BodySpeed * Time.deltaTime);
-        Neck.transform.rotation = Quaternion.Slerp(Neck.rotation, _neckTargetRot, BodySpeed * Time.deltaTime);
+        Chest.transform.localRotation = Quaternion.Slerp(Chest.localRotation, _bodyTargetRot, BodySpeed * Time.deltaTime);
+        Neck.transform.localRotation = Quaternion.Slerp(Neck.localRotation, _neckTargetRot, BodySpeed * Time.deltaTime);
     }
 
     IEnumerator HeadSquash()
@@ -236,10 +250,26 @@ public class OSF_Script : MonoBehaviour
         }
     }
 
+    public void ResetCharacterRotation()
+    {
+        var _osf_data = openSee.GetOpenSeeData(0);
+        var _headTargetRot = Quaternion.Inverse(Quaternion.Euler(-_osf_data.rotation.x + HeadRotationOffset.x, -_osf_data.rotation.y + HeadRotationOffset.y, _osf_data.rotation.z + HeadRotationOffset.z));
+        HeadRotationResetOffset = _headTargetRot;
+    }
+
+
     #endregion
 
     #region EYES
-
+    public void ResetEyeRotation()
+    {
+        var _osf_data = openSee.GetOpenSeeData(0);
+        var _LeyeTargetRot = Quaternion.Euler(-_osf_data.rightGaze.eulerAngles.x, -_osf_data.rightGaze.eulerAngles.y - 5, _osf_data.leftGaze.eulerAngles.z);
+        LEyeRotationResetOffset = Quaternion.Inverse(_LeyeTargetRot);
+        Debug.Log(LEyeRotationResetOffset * _LeyeTargetRot);
+        var _ReyeTargetRot = Quaternion.Inverse(Quaternion.Euler(-_osf_data.rightGaze.eulerAngles.x, -_osf_data.rightGaze.eulerAngles.y, _osf_data.leftGaze.eulerAngles.z));
+        REyeRotationResetOffset = _ReyeTargetRot;
+    }
     private void HandleEyeRotation(OpenSee.OpenSee.OpenSeeData eye_data)
     {
         switch (eyeTrackingType)
@@ -250,8 +280,9 @@ public class OSF_Script : MonoBehaviour
             case EyeTrackingType.Continous:
                 HandleContinousEyeRotation(eye_data);
                 break;
-            default:
-                Debug.LogError("No valid eye tracking type detected");
+            case EyeTrackingType.None:
+                if (continousEyeRotation != null)
+                    StopCoroutine(continousEyeRotation);
                 break;
         }
 
@@ -322,62 +353,70 @@ public class OSF_Script : MonoBehaviour
     //ROTATION TYPES-------------------------------------------------------------------
     private void HandleFixedEyeRotation(OpenSee.OpenSee.OpenSeeData eye_data)
     {
+        if (continousEyeRotation != null)
+            StopCoroutine(continousEyeRotation);
+
         if (!areEyesOpen(eye_data)) return;
 
         if (continousEyeRotation != null) StopCoroutine(continousEyeRotation);
 
-        Quaternion _LEyeRot = InitialLEyeRotation * Quaternion.Euler(-eye_data.rightGaze.eulerAngles.x, -eye_data.rightGaze.eulerAngles.y, eye_data.leftGaze.eulerAngles.z) * Quaternion.Euler(EyeRotationOffset);
-        Quaternion _REyeRot = InitialREyeRotation * Quaternion.Euler(-eye_data.rightGaze.eulerAngles.x, -eye_data.rightGaze.eulerAngles.y, eye_data.leftGaze.eulerAngles.z) * Quaternion.Euler(EyeRotationOffset);
+        Quaternion _LEyeRot = InitialLEyeRotation * LEyeRotationResetOffset * Quaternion.Euler(-eye_data.rightGaze.eulerAngles.x, -eye_data.rightGaze.eulerAngles.y, eye_data.leftGaze.eulerAngles.z);
+        Quaternion _REyeRot = InitialREyeRotation * REyeRotationResetOffset * Quaternion.Euler(-eye_data.rightGaze.eulerAngles.x, -eye_data.rightGaze.eulerAngles.y, eye_data.leftGaze.eulerAngles.z);
 
-        _LTargetRot = InitialLEyeRotation;
-        _RTargetRot = InitialREyeRotation;
+        Quaternion LeftReyeRot = InitialREyeRotation * REyeRotationResetOffset * Quaternion.Euler(0, 17, 0);
+        Quaternion RightReyeRot = InitialREyeRotation * REyeRotationResetOffset * Quaternion.Euler(0, -14, 0);
+        Quaternion DownReyeRot = InitialREyeRotation * REyeRotationResetOffset * Quaternion.Euler(10, 0, 0);
+        Quaternion UpReyeRot = InitialREyeRotation * REyeRotationResetOffset * Quaternion.Euler(-12, 0, 0);
 
-        if(_REyeRot.y < -0.15f && _REyeRot.w > 0.5f)
-        {
-            eyeGazeTimer += Time.deltaTime;
-            if (eyeGazeTimer > eyeGazeTimerMax)
-            {
-                //LOOK RIGHT
-                _RTargetRot = InitialREyeRotation * Quaternion.Euler(0, -8f, 0);
-                _LTargetRot = InitialLEyeRotation * Quaternion.Euler(0, -17f, 0);
-            }
-
-        }
-        else if(_REyeRot.y < -0.08f && _REyeRot.w < -0.5f)
+        if (Quaternion.Angle(_REyeRot, LeftReyeRot) < fixedEyeRotAngle)
         {
             eyeGazeTimer += Time.deltaTime;
             if (eyeGazeTimer > eyeGazeTimerMax)
             {
                 //LOOK LEFT
-                _RTargetRot = InitialREyeRotation * Quaternion.Euler(0, 13f, 0);
-                _LTargetRot = InitialLEyeRotation * Quaternion.Euler(0, 11f, 0);
+                _RTargetRot = InitialREyeRotation * REyeRotationResetOffset * Quaternion.Euler(0, 13f, 0);
+                _LTargetRot = InitialLEyeRotation * LEyeRotationResetOffset * Quaternion.Euler(0, 11f, 0);
             }
         }
-        else if (_REyeRot.x < -0.02f && _REyeRot.w > 0.5f)
+        else if (Quaternion.Angle(_REyeRot, RightReyeRot) < fixedEyeRotAngle)
         {
             eyeGazeTimer += Time.deltaTime;
             if (eyeGazeTimer > eyeGazeTimerMax)
             {
-                //LOOK UP
-                _RTargetRot = InitialREyeRotation * Quaternion.Euler(-14f, 0, 0);
-                _LTargetRot = InitialLEyeRotation * Quaternion.Euler(-14f, 0, 0);
+                //LOOK RIGHT
+                _RTargetRot = InitialREyeRotation * REyeRotationResetOffset * Quaternion.Euler(0, -8f, 0);
+                _LTargetRot = InitialLEyeRotation * LEyeRotationResetOffset * Quaternion.Euler(0, -17f, 0);
             }
         }
-        else if (_REyeRot.x < -0.02f && _REyeRot.w < -0.5f)
+        else if (Quaternion.Angle(_REyeRot, DownReyeRot) < fixedEyeRotAngle)
         {
             eyeGazeTimer += Time.deltaTime;
             if (eyeGazeTimer > eyeGazeTimerMax)
             {
                 //LOOK DOWN
-                _RTargetRot = InitialREyeRotation * Quaternion.Euler(11, 0, 0);
-                _LTargetRot = InitialLEyeRotation * Quaternion.Euler(11, 0, 0);
+                _RTargetRot = InitialREyeRotation * REyeRotationResetOffset * Quaternion.Euler(11, 0, 0);
+                _LTargetRot = InitialLEyeRotation * LEyeRotationResetOffset * Quaternion.Euler(11, 0, 0);
+            }
+        }
+        else if (Quaternion.Angle(_REyeRot, UpReyeRot) < fixedEyeRotAngle)
+        {
+            eyeGazeTimer += Time.deltaTime;
+            if (eyeGazeTimer > eyeGazeTimerMax)
+            {
+                //LOOK UP
+                _RTargetRot = InitialREyeRotation * REyeRotationResetOffset * Quaternion.Euler(-14f, 0, 0);
+                _LTargetRot = InitialLEyeRotation * LEyeRotationResetOffset * Quaternion.Euler(-14f, 0, 0);
             }
         }
         else //RESET GAZE
         {
-            _RTargetRot = InitialREyeRotation;
-            _LTargetRot = InitialLEyeRotation;
-            eyeGazeTimer = 0f;
+            eyeGazeTimer += Time.deltaTime;
+            if (eyeGazeTimer > eyeGazeTimerMax)
+            {
+                _RTargetRot = InitialREyeRotation * REyeRotationResetOffset;
+                _LTargetRot = InitialLEyeRotation * LEyeRotationResetOffset;
+                eyeGazeTimer = 0f;
+            }
         }
     }
     private void HandleContinousEyeRotation(OpenSee.OpenSee.OpenSeeData eye_data)
@@ -397,8 +436,8 @@ public class OSF_Script : MonoBehaviour
 
                 Quaternion rightGaze = ApplyDeadzone(InitialREyeRotation, eye_data.rightGaze, deadzone);
 
-                Quaternion _LEyeRot = InitialLEyeRotation * Quaternion.Euler(-rightGaze.eulerAngles.x, -rightGaze.eulerAngles.y - 5, eye_data.leftGaze.eulerAngles.z) * Quaternion.Euler(EyeRotationOffset);
-                Quaternion _REyeRot = InitialREyeRotation * Quaternion.Euler(-rightGaze.eulerAngles.x, -rightGaze.eulerAngles.y, eye_data.rightGaze.eulerAngles.z) * Quaternion.Euler(EyeRotationOffset);
+                Quaternion _LEyeRot = InitialLEyeRotation * LEyeRotationResetOffset * Quaternion.Euler(-rightGaze.eulerAngles.x, -rightGaze.eulerAngles.y - 5, eye_data.leftGaze.eulerAngles.z);
+                Quaternion _REyeRot = InitialREyeRotation * REyeRotationResetOffset * Quaternion.Euler(-rightGaze.eulerAngles.x, -rightGaze.eulerAngles.y, eye_data.rightGaze.eulerAngles.z);
 
                 float LEyeRotY = _LEyeRot.eulerAngles.y;
                 if (LEyeRotY > 300) LEyeRotY = Mathf.Clamp(_LEyeRot.eulerAngles.y, 336f, 360f);
@@ -480,12 +519,10 @@ public class OSF_Script : MonoBehaviour
         float _mouthWide = mouth_data.features.MouthWide;
         if (_mouthWide > 0.2f)
         {
-            Debug.Log(_mouthWide * 100);
             Face.SetBlendShapeWeight(BS_MouthSmile, Mathf.Lerp(Face.GetBlendShapeWeight(BS_MouthSmile), _mouthWide * 100, mouthSpeed * Time.deltaTime));
         }
         else
         {
-            Debug.Log(_mouthWide + "AAAA");
             Face.SetBlendShapeWeight(BS_MouthSmile, Mathf.Lerp(Face.GetBlendShapeWeight(BS_MouthSmile), 0, mouthSpeed * Time.deltaTime));
         }
     }
@@ -495,34 +532,30 @@ public class OSF_Script : MonoBehaviour
     #region EYEBROWS
     private void HandleEyebrows(OpenSee.OpenSee.OpenSeeData brow_data)
     {
-        //HandleEyebrow(brow_data.features.EyebrowUpDownRight,BS_EyebrowUp_R, BS_EyebrowDown_R);
-        //HandleEyebrow(brow_data.features.EyebrowUpDownLeft, BS_EyebrowUp_L, BS_EyebrowDown_L);
-    }
+        float media = (brow_data.features.EyebrowUpDownRight + brow_data.features.EyebrowUpDownLeft)/2;
+        
+        Debug.Log(media);
 
-    private void HandleEyebrow(float value, int eyebrowUp, int eyebrowDown)
-    {
-        Debug.Log(value + "  " + (eyebrowNeutralLeft + eyebrowDeadzoneLeft));
-
-        float offset = eyebrowsDownLeft;
-        if (eyebrowsDownLeft < 0) offset = -eyebrowsDownLeft;
-        float mult = 1 / (eyebrowsUpLeft + offset);
-
-        float upValue = (value + offset) * mult;
-        float downValue = 1 - ((value - offset) * mult);
-
-
-        if (value > eyebrowNeutralLeft + eyebrowDeadzoneLeft)
+        if (media > eyebrowsUp - eyebrowsRange)
         {
-            SetBlendShapes(Face, eyebrowUp, Mathf.Clamp(upValue, 0, 1) * 100, eyebrowsSpeed);
+            Debug.Log("EYEBROWS UP");
+            float value = Math.Abs((eyebrowsUp - Mathf.Clamp(media, eyebrowsDown, eyebrowsUp) / eyebrowsRange));
+            SetBlendShapes(Face, BS_EyebrowUp_R, value * 100, eyebrowsSpeed);
+            SetBlendShapes(Face, BS_EyebrowUp_L, value * 100, eyebrowsSpeed);
         }
-        else if (value < eyebrowNeutralLeft - eyebrowDeadzoneLeft)
+        else if (media < eyebrowsDown + eyebrowsRange)
         {
-            SetBlendShapes(Face, eyebrowDown,  Mathf.Clamp(downValue, 0, 1) * 100, eyebrowsSpeed);
+            Debug.Log("EYEBROWS DOWN");
+            float value = Math.Abs((eyebrowsDown - Mathf.Clamp(media, eyebrowsDown, eyebrowsUp) / eyebrowsRange));
+            SetBlendShapes(Face, BS_EyebrowDown_R, value * 100, eyebrowsSpeed);
+            SetBlendShapes(Face, BS_EyebrowDown_L, value * 100, eyebrowsSpeed);
         }
         else
         {
-            SetBlendShapes(Face, eyebrowDown, 0, eyebrowsSpeed);
-            SetBlendShapes(Face, eyebrowUp, 0, eyebrowsSpeed);
+            SetBlendShapes(Face, BS_EyebrowDown_R, 0, eyebrowsSpeed);
+            SetBlendShapes(Face, BS_EyebrowDown_L, 0, eyebrowsSpeed);
+            SetBlendShapes(Face, BS_EyebrowUp_R, 0, eyebrowsSpeed);
+            SetBlendShapes(Face, BS_EyebrowUp_L, 0, eyebrowsSpeed);
         }
     }
 
@@ -722,4 +755,99 @@ public class OSF_Script : MonoBehaviour
     }
 
     #endregion
+
+    #region SAVING AND LOADING DATA
+    public void TryToLoadData()
+    {
+        SaveData saveData = SaveManager.instance.LoadData();
+        if (saveData != null)
+        {
+            LoadData(saveData);
+        }
+    }
+
+    public void LoadData(SaveData data)
+    {
+        blinkThreshold = data.blinkThreshold;
+        winkThreshold = data.winkThreshold;
+        openThreshold = data.openThreshold;
+        deadzone = data.deadzone;
+        eyeTrackingType = data.eyeTracking;
+        eyelidSpeed = data.eyeSpeed;
+        mouthOpenRatio = data.mouthOpenRatio;
+        mouthSpeed = data.mouthSpeed;
+        BodySpeed = data.bodySpeed;
+        BodyRotationRatio = data.bodyRotationRatio;
+        squashThreshold = data.squashThreshold;
+
+        HeadRotationResetOffset = data.HeadRotationResetOffset;
+        LEyeRotationResetOffset = data.LEyeRotationResetOffset;
+        REyeRotationResetOffset = data.REyeRotationResetOffset;
+
+        ChangeLightRot(data.lightRot);
+        ChangeMainBodyRot(data.baseBodyRot);
+        ChangeZoom(data.zoom);
+        ChangeCamPos(data.camPos);
+
+        ui.LoadData(data);
+    }
+
+    public void SaveData()
+    {
+        SaveManager.instance.SaveData
+            (
+            new SaveData(
+                blinkThreshold,
+                winkThreshold,
+                openThreshold,
+                deadzone,
+                eyeTrackingType,
+                eyelidSpeed,
+                mouthOpenRatio,
+                mouthSpeed,
+                BodySpeed,
+                BodyRotationRatio,
+                squashThreshold,
+                MainLigth.rotation.eulerAngles.y,
+                Camera.main.transform.position.z,
+                Camera.main.transform.position.y,
+                this.transform.rotation.eulerAngles.y,
+                HeadRotationResetOffset,
+                LEyeRotationResetOffset,
+                REyeRotationResetOffset
+                )
+            );
+    }
+    
+    public void ResetData()
+    {
+        //BASE DATA
+        LoadData(new SaveData(0.2f, 0.45f, 0.75f, 4, EyeTrackingType.Continous, 35, 0.66f, 20, 10, 0.3f, 0.15f, 330f, 
+            -4.5f, 1.17f, 160f, Quaternion.identity, Quaternion.identity, Quaternion.identity));
+    }
+
+    public void ChangeLightRot(float rot)
+    {
+        MainLigth.rotation = Quaternion.Euler(11.4f, rot, -15.47f);
+    }
+    public void ChangeMainBodyRot(float rot)
+    {
+        this.transform.rotation = Quaternion.Euler(0f, rot, 0f);
+    }
+    public void ChangeZoom(float zoom)
+    {
+        var _camPos = Camera.main.transform.position;
+        AppCam.position = new Vector3(_camPos.x, _camPos.y, zoom);
+        MainCam.position = new Vector3(_camPos.x, _camPos.y, zoom);
+    }
+    public void ChangeCamPos(float pos)
+    {
+        var _camPos = Camera.main.transform.position;
+        AppCam.position = new Vector3(_camPos.x, pos, _camPos.z);
+        MainCam.position = new Vector3(_camPos.x, pos, _camPos.z);
+    }
+
+    #endregion
+
+
 }

@@ -3287,7 +3287,7 @@ MonoBehaviour:
   LeftEye: {fileID: 2056262922}
   RightEye: {fileID: 2056262921}
   HeadRotationOffset: {x: 22, y: 0, z: 0}
-  EyeRotationOffset: {x: 10, y: 8, z: 0}
+  EyeRotationOffset: {x: 0, y: 0, z: 0}
   HeadRotationMultiplier: {x: 0, y: 0, z: 0}
   blinkThreshold: 0.2
   winkThreshold: 0.45
