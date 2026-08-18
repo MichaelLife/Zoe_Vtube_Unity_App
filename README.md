@@ -16,6 +16,9 @@ The expressions are controlled with the 1(surprised),2(angry),3(sad) and 7(maste
 
 You can connect the app with the obs spout2 pluggin -> https://github.com/Off-World-Live/obs-spout2-plugin
 
+If you want to mirror the character movement, go to the run.bat file in the OpenSeeFace\Binary folder, open in with notepad (put: notepad run.bat in the windows explorer) and add -M here, save and close the notepad, it shoud be mirrored after you ran the .bat now:
+<img width="1316" height="382" alt="image" src="https://github.com/user-attachments/assets/6e9d4432-941a-4a41-a138-5b76c87224b5" />
+
 # HOW TO FURTHER CUSTOMIZE THE APP
 **This was an experiment I developed in Unity, so it's a bit unstable, and it might not work for everyone.** If you want to tinker with the settings or add expressions, VFX or other stuff; download the source files on the releases tab. The project uses **Unity 6000.3.21f**, download the unity version and open the project.
 
