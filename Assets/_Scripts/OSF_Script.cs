@@ -74,8 +74,8 @@ public class OSF_Script : MonoBehaviour
     [Range(0, 1)]
     public float mouthOpenRatio;
     public float mouthSpeed;
-    [Range(0, 2)]
-    [SerializeField] float mouthInOutRatio = 1f;
+    //[Range(0, 2)]
+    //[SerializeField] float mouthInOutRatio = 1f;
     [SerializeField] uLipSyncBlendShape lipSync;
     private float minVolume;
     private float volume;
@@ -99,6 +99,7 @@ public class OSF_Script : MonoBehaviour
     [SerializeField] Animator anim;
     [SerializeField] bool OnlyManualExpressions = true;
     private Vector3 previousHeadPos;
+    [HideInInspector] public bool mirrorZAxis;
 
     [Header("VFX")]
     [SerializeField] VisualEffect sleepVFX;
@@ -212,7 +213,9 @@ public class OSF_Script : MonoBehaviour
     #region HEAD
     private void HandleHeadRotation(OpenSee.OpenSee.OpenSeeData head_data)
     {
-        var _headTargetRot = InitialHeadRotation * HeadRotationResetOffset * Quaternion.Euler(-head_data.rotation.x + HeadRotationOffset.x, -head_data.rotation.y + HeadRotationOffset.y, head_data.rotation.z + HeadRotationOffset.z);
+        var rot = Quaternion.Euler(-head_data.rotation.x + HeadRotationOffset.x, -head_data.rotation.y + HeadRotationOffset.y, head_data.rotation.z + HeadRotationOffset.z);
+
+        var _headTargetRot = InitialHeadRotation * HeadRotationResetOffset * rot;
 
         HandleBodyRotation(_headTargetRot.eulerAngles);
 
@@ -283,6 +286,8 @@ public class OSF_Script : MonoBehaviour
             case EyeTrackingType.None:
                 if (continousEyeRotation != null)
                     StopCoroutine(continousEyeRotation);
+                _RTargetRot = InitialREyeRotation;
+                _LTargetRot = InitialLEyeRotation;
                 break;
         }
 
@@ -335,19 +340,6 @@ public class OSF_Script : MonoBehaviour
 
         SetBlendShapes(Eyelashes, BS_EyelashesClosed_R, (1 - eye_data.leftEyeOpen) * 100, eyelidSpeed);
         SetBlendShapes(Eyelashes, BS_EyelashesClosed_L, (1 - eye_data.leftEyeOpen) * 100, eyelidSpeed);
-        /*
-        if (!areEyesOpen(eye_data) || eye_data.leftEyeOpen > 0.9f)
-        {
-            Face.SetBlendShapeWeight(BS_EyeClosed_R, Mathf.Lerp(Face.GetBlendShapeWeight(BS_EyeClosed_R), eye_data.leftEyeOpen * 100, eyelidSpeed * Time.deltaTime));
-            Face.SetBlendShapeWeight(BS_EyeClosed_L, Mathf.Lerp(Face.GetBlendShapeWeight(BS_EyeClosed_L), eye_data.leftEyeOpen * 100, eyelidSpeed * Time.deltaTime));
-
-            Eyelashes.SetBlendShapeWeight(BS_EyelashesClosed_L, Mathf.Lerp(Eyelashes.GetBlendShapeWeight(BS_EyelashesClosed_L), eye_data.leftEyeOpen * 100, eyelidSpeed * Time.deltaTime));
-            Eyelashes.SetBlendShapeWeight(BS_EyelashesClosed_R, Mathf.Lerp(Eyelashes.GetBlendShapeWeight(BS_EyelashesClosed_R), eye_data.leftEyeOpen * 100, eyelidSpeed * Time.deltaTime));
-        }
-        else
-        {
-            Blink(false);
-        }*/
     }
 
     //ROTATION TYPES-------------------------------------------------------------------
@@ -360,13 +352,13 @@ public class OSF_Script : MonoBehaviour
 
         if (continousEyeRotation != null) StopCoroutine(continousEyeRotation);
 
-        Quaternion _LEyeRot = InitialLEyeRotation * LEyeRotationResetOffset * Quaternion.Euler(-eye_data.rightGaze.eulerAngles.x, -eye_data.rightGaze.eulerAngles.y, eye_data.leftGaze.eulerAngles.z);
+        Quaternion _LEyeRot = InitialLEyeRotation * LEyeRotationResetOffset * Quaternion.Euler(-eye_data.rightGaze.eulerAngles.x, -eye_data.rightGaze.eulerAngles.y - 5, eye_data.leftGaze.eulerAngles.z);
         Quaternion _REyeRot = InitialREyeRotation * REyeRotationResetOffset * Quaternion.Euler(-eye_data.rightGaze.eulerAngles.x, -eye_data.rightGaze.eulerAngles.y, eye_data.leftGaze.eulerAngles.z);
 
         Quaternion LeftReyeRot = InitialREyeRotation * REyeRotationResetOffset * Quaternion.Euler(0, 17, 0);
         Quaternion RightReyeRot = InitialREyeRotation * REyeRotationResetOffset * Quaternion.Euler(0, -14, 0);
-        Quaternion DownReyeRot = InitialREyeRotation * REyeRotationResetOffset * Quaternion.Euler(10, 0, 0);
-        Quaternion UpReyeRot = InitialREyeRotation * REyeRotationResetOffset * Quaternion.Euler(-12, 0, 0);
+        Quaternion DownReyeRot = InitialREyeRotation * REyeRotationResetOffset * Quaternion.Euler(14, 0, 0);
+        Quaternion UpReyeRot = InitialREyeRotation * REyeRotationResetOffset * Quaternion.Euler(-14, 0, 0);
 
         if (Quaternion.Angle(_REyeRot, LeftReyeRot) < fixedEyeRotAngle)
         {
@@ -579,9 +571,18 @@ public class OSF_Script : MonoBehaviour
         BS_EyebrowDown_R = Array.IndexOf(blendShapeArrayFace, _blendShapesNames.BS_EyebrowDown_R);
         BS_Angry = Array.IndexOf(blendShapeArrayFace, _blendShapesNames.BS_Angry);
         BS_Surprised = Array.IndexOf(blendShapeArrayFace, _blendShapesNames.BS_Surprised);
+
+        expressionList = new int[]
+        {
+            BS_MouthKiss,
+            BS_MouthPuff,
+            BS_MouthSad,
+            BS_Angry,
+            BS_Surprised
+        };
     }
 
-    public string[] getBlendShapeNames(GameObject obj)
+public string[] getBlendShapeNames(GameObject obj)
     {
         SkinnedMeshRenderer head = obj.GetComponent<SkinnedMeshRenderer>();
         Mesh m = head.sharedMesh;
@@ -597,7 +598,7 @@ public class OSF_Script : MonoBehaviour
     }
     private void SetBlendShapes(SkinnedMeshRenderer mesh, int _blendShape, float value, float speed)
     {
-        mesh.SetBlendShapeWeight(_blendShape, Mathf.Lerp(Face.GetBlendShapeWeight(_blendShape), value, speed * Time.deltaTime));
+        mesh.SetBlendShapeWeight(_blendShape, Mathf.Lerp(mesh.GetBlendShapeWeight(_blendShape), value, speed * Time.deltaTime));
     }
     #endregion
 
@@ -814,7 +815,8 @@ public class OSF_Script : MonoBehaviour
                 this.transform.rotation.eulerAngles.y,
                 HeadRotationResetOffset,
                 LEyeRotationResetOffset,
-                REyeRotationResetOffset
+                REyeRotationResetOffset,
+                true
                 )
             );
     }
@@ -823,7 +825,7 @@ public class OSF_Script : MonoBehaviour
     {
         //BASE DATA
         LoadData(new SaveData(0.2f, 0.45f, 0.75f, 4, EyeTrackingType.Continous, 35, 0.66f, 20, 10, 0.3f, 0.15f, 330f, 
-            -4.5f, 1.17f, 160f, Quaternion.identity, Quaternion.identity, Quaternion.identity));
+            -4.5f, 1.17f, 160f, Quaternion.identity, Quaternion.identity, Quaternion.identity,true ));
     }
 
     public void ChangeLightRot(float rot)
@@ -848,6 +850,4 @@ public class OSF_Script : MonoBehaviour
     }
 
     #endregion
-
-
 }

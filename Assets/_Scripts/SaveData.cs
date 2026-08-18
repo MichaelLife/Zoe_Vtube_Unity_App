@@ -26,10 +26,12 @@ public class SaveData
     public Quaternion HeadRotationResetOffset;
     public Quaternion LEyeRotationResetOffset;
     public Quaternion REyeRotationResetOffset;
+
+    public bool mirrorZAxis;
     public SaveData(float blinkThreshold, float winkThreshold, float openThreshold, float deadzone, EyeTrackingType eyeTracking,
         float eyeSpeed, float mouthOpenRatio, float mouthSpeed, float bodySpeed, float bodyRotationRatio, float squashThreshold,
         float lightRot, float zoom, float camPos, float baseBodyRot, Quaternion HeadRotationResetOffset,
-        Quaternion LEyeRotationResetOffset, Quaternion REyeRotationResetOffset)
+        Quaternion LEyeRotationResetOffset, Quaternion REyeRotationResetOffset, bool mirrorZAxis)
     {
         this.blinkThreshold = blinkThreshold;
         this.winkThreshold = winkThreshold;
@@ -49,5 +51,6 @@ public class SaveData
         this.HeadRotationResetOffset = HeadRotationResetOffset;
         this.LEyeRotationResetOffset = LEyeRotationResetOffset;
         this.REyeRotationResetOffset = REyeRotationResetOffset;
+        this.mirrorZAxis = mirrorZAxis;
     }
 }

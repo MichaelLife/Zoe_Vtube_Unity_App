@@ -9,6 +9,8 @@
     margin-right: 0;
     margin-bottom: 0;
     margin-left: 0;
+    flex-grow: 1;
+    -unity-text-align: middle-left;
 }
 
 .Slider:focus {
@@ -234,4 +236,12 @@
 .Label {
     font-size: 30px;
     color: rgb(255, 255, 255);
+}
+
+.Slider #Label {
+    flex-grow: 1;
+}
+
+.unity-base-slider__label {
+    flex-grow: 0;
 }

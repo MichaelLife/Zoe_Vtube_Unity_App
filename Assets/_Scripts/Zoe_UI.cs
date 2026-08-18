@@ -12,6 +12,7 @@ public class Zoe_UI : MonoBehaviour
     private Slider blinkThresholdSlider, winkThresholdSlider, openThresholdSlider, deadzoneSlider, eyelidSpeedSlider, mouthOpenRatioSlider,
         mouthSpeedSlider, BodySpeedSlider, BodyRotationRatioSlider, squashThresholdSlider, lightSlider, zoomSlider, posSlider, baseBodyRotSlider;
     private EnumField eyeRotType;
+    private Toggle mirrorToggle;
     void Start()
     {
         root = _ui.rootVisualElement;
@@ -23,6 +24,7 @@ public class Zoe_UI : MonoBehaviour
         var ResetCharRot = root.Q<VisualElement>("ResetCharRot");
         var ResetEyeRot = root.Q<VisualElement>("ResetEyeRot");
         var hideOrShowButton = root.Q<VisualElement>("HideOrShow");
+        mirrorToggle = root.Q<Toggle>("Mirror");
 
         blinkThresholdSlider = root.Q<Slider>("Blink");
         winkThresholdSlider = root.Q<Slider>("Wink");
@@ -62,11 +64,16 @@ public class Zoe_UI : MonoBehaviour
         posSlider.RegisterCallback<ChangeEvent<float>>(UpdateValues);
         baseBodyRotSlider.RegisterCallback<ChangeEvent<float>>(UpdateValues);
 
+        mirrorToggle.RegisterValueChangedCallback(_event =>
+        {
+            OSF_Script.instance.mirrorZAxis = mirrorToggle.value;
+        });
+
+
         eyeRotType.RegisterValueChangedCallback(_event =>
         {
             OSF_Script.instance.eyeTrackingType = (EyeTrackingType)eyeRotType.value;
-        }
-        );
+        });
     }
 
     private void SaveEvent(ClickEvent _event)
@@ -116,6 +123,7 @@ public class Zoe_UI : MonoBehaviour
         zoomSlider.value = data.zoom;
         baseBodyRotSlider.value = data.baseBodyRot;
         posSlider.value = data.camPos;
+        mirrorToggle.value = data.mirrorZAxis;
     }
 
     public void ShowOrHideUI(ClickEvent _event)
